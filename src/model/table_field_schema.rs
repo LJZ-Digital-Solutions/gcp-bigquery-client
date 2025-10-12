@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::model::field_type::FieldType;
 use crate::model::table_field_schema_categories::TableFieldSchemaCategories;
 use crate::model::table_field_schema_policy::TableFieldSchemaPolicyTags;
@@ -23,6 +25,47 @@ pub struct TableFieldSchema {
     pub policy_tags: Option<TableFieldSchemaPolicyTags>,
     /// [Required] The field data type. Possible values include STRING, BYTES, INTEGER, INT64 (same as INTEGER), FLOAT, FLOAT64 (same as FLOAT), NUMERIC, BIGNUMERIC, BOOLEAN, BOOL (same as BOOLEAN), TIMESTAMP, DATE, TIME, DATETIME, RECORD (where RECORD indicates that the field contains a nested schema) or STRUCT (same as RECORD).
     pub r#type: FieldType,
+}
+
+impl Eq for TableFieldSchema {}
+
+impl PartialEq for TableFieldSchema {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.mode == other.mode
+            && self.r#type == other.r#type
+            && match (&self.fields, &other.fields) {
+                (Some(a), Some(b)) => {
+                    let set_fields_a: HashSet<&TableFieldSchema> = a.iter().collect();
+                    let set_fields_b: HashSet<&TableFieldSchema> = b.iter().collect();
+                    set_fields_a == set_fields_b
+                }
+                (None, None) => true,
+                _ => false,
+            }
+    }
+}
+
+impl std::hash::Hash for TableFieldSchema {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.mode.hash(state);
+        self.r#type.hash(state);
+
+        // For fields, we need to handle the Vec in a way that matches PartialEq
+        // If PartialEq treats it as a set, Hash should too
+        if let Some(fields) = &self.fields {
+            // Sort fields to get consistent hashing regardless of order
+            let mut sorted_fields: Vec<_> = fields.iter().collect();
+            sorted_fields.sort_by_key(|f| {
+                // Create a stable sort key
+                (&f.name, &f.r#type)
+            });
+            sorted_fields.hash(state);
+        } else {
+            None::<Vec<&TableFieldSchema>>.hash(state);
+        }
+    }
 }
 
 impl TableFieldSchema {
