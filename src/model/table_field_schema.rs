@@ -52,18 +52,14 @@ impl std::hash::Hash for TableFieldSchema {
         self.mode.hash(state);
         self.r#type.hash(state);
 
-        // For fields, we need to handle the Vec in a way that matches PartialEq
-        // If PartialEq treats it as a set, Hash should too
         if let Some(fields) = &self.fields {
             // Sort fields to get consistent hashing regardless of order
             let mut sorted_fields: Vec<_> = fields.iter().collect();
-            sorted_fields.sort_by_key(|f| {
-                // Create a stable sort key
-                (&f.name, &f.r#type)
-            });
-            sorted_fields.hash(state);
-        } else {
-            None::<Vec<&TableFieldSchema>>.hash(state);
+            sorted_fields.sort_by(|a, b| (&a.name, &a.mode, &a.r#type).cmp(&(&b.name, &b.mode, &b.r#type)));
+            // This will recursively call Hash on each nested TableFieldSchema
+            for field in sorted_fields {
+                field.hash(state); // Explicitly shows recursion happening here
+            }
         }
     }
 }
